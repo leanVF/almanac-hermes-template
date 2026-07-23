@@ -1,15 +1,13 @@
 #!/bin/sh
 # Servicio s6 para preparar el perfil y los symlinks.
-# Tipo: longrun (no oneshot — s6-overlay 3.x tiene requisitos
-# adicionales para oneshot que no vale la pena manejar).
-# El script termina con exit 0 después del setup; s6 lo marca
-# como "finished" pero no reinicia el container.
+# Genera el .env del perfil desde las env vars de Coolify.
 
 set -e
 
 echo "[nel-ai-init] Inicializando perfil de Nel AI Vendedor..."
 
 export HERMES_HOME=/opt/data
+ENV_FILE="$HERMES_HOME/profiles/nel-ai-vendedor/.env"
 
 # 1. Crear el perfil si no existe
 if [ ! -d "$HERMES_HOME/profiles/nel-ai-vendedor" ]; then
@@ -18,7 +16,40 @@ if [ ! -d "$HERMES_HOME/profiles/nel-ai-vendedor" ]; then
     cp -r /opt/nel-ai/profile "$HERMES_HOME/profiles/nel-ai-vendedor"
 fi
 
-# 2. Crear symlinks para los assets
+# 2. Crear el .env desde las env vars del container (Coolify)
+# Solo si no existe (preservar cambios manuales en reinicios)
+if [ ! -f "$ENV_FILE" ]; then
+    echo "[nel-ai-init] Generando .env desde env vars de Coolify..."
+    cat > "$ENV_FILE" <<EOF
+# Generado automáticamente por nel-ai-init desde Coolify env vars
+# NO editar a mano — los cambios se pierden en el próximo deploy
+
+CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL:-}
+CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN:-}
+CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID:-1}
+CHATWOOT_AGENT_NAME=${CHATWOOT_AGENT_NAME:-Nel AI Vendedor}
+CHATWOOT_AGENT_EMAIL=${CHATWOOT_AGENT_EMAIL:-nel-ai-vendedor@almanac.lat}
+CHATWOOT_INBOX_IDS=${CHATWOOT_INBOX_IDS:-2,4}
+CHATWOOT_MODE=${CHATWOOT_MODE:-auto}
+CHATWOOT_IGNORE_AGENT_MESSAGES=${CHATWOOT_IGNORE_AGENT_MESSAGES:-true}
+HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL:-http://127.0.0.1:8642}
+NEL_DAEMON_INTERVAL=${NEL_DAEMON_INTERVAL:-8}
+NEL_WEBHOOK_HOST=${NEL_WEBHOOK_HOST:-127.0.0.1}
+NEL_WEBHOOK_PORT=${NEL_WEBHOOK_PORT:-8766}
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+TRELLO_API_KEY=${TRELLO_API_KEY:-}
+TRELLO_TOKEN=${TRELLO_TOKEN:-}
+TRELLO_BOARD_ID=${TRELLO_BOARD_ID:-}
+MCP_HIGGSFIELD_BEARER=${MCP_HIGGSFIELD_BEARER:-}
+EOF
+    chmod 600 "$ENV_FILE"
+    echo "[nel-ai-init] .env creado en $ENV_FILE"
+else
+    echo "[nel-ai-init] .env ya existe, conservando"
+fi
+
+# 3. Crear symlinks para los assets
 mkdir -p "$HERMES_HOME/work/almanac-onboarding/configuracion"
 for f in frases-y-tono productos precios informacion-general que-hacemos mercado-competencia mision-vision; do
     if [ -f "/opt/nel-ai/configuracion/${f}.md" ] && [ ! -e "$HERMES_HOME/work/almanac-onboarding/configuracion/${f}.md" ]; then
@@ -27,11 +58,9 @@ for f in frases-y-tono productos precios informacion-general que-hacemos mercado
     fi
 done
 
-# 3. Crear directorio de logs
+# 4. Crear directorio de logs
 mkdir -p "$HERMES_HOME/profiles/nel-ai-vendedor/logs"
 
 echo "[nel-ai-init] Inicialización completa."
 
-# Terminar exitosamente. s6-overlay marca el longrun como "finished"
-# y no lo reinicia (porque el script salió con código 0).
 exit 0
