@@ -61,13 +61,26 @@ DAEMON_PID=$!
 
 echo "[entrypoint] Gateway PID=$GATEWAY_PID, Daemon PID=$DAEMON_PID"
 
-# 7. Esperar a que cualquiera termine; si uno muere, matar el otro
-wait -n $GATEWAY_PID $DAEMON_PID
-EXIT_CODE=$?
-
-echo "[entrypoint] Proceso terminó (código $EXIT_CODE), apagando container..."
-
-kill $GATEWAY_PID 2>/dev/null || true
-kill $DAEMON_PID 2>/dev/null || true
-
-exit $EXIT_CODE
+# 7. Loop: esperar a que cualquiera termine; si uno muere, matar el otro.
+# (NO usamos 'wait -n' porque no funciona en BusyBox sh — bug visto en producción.)
+echo "[entrypoint] Monitoreando procesos (Ctrl+C para salir)..."
+while true; do
+    # Si el gateway murió
+    if ! kill -0 $GATEWAY_PID 2>/dev/null; then
+        echo "[entrypoint] Gateway murió, matando daemon y saliendo..."
+        kill $DAEMON_PID 2>/dev/null || true
+        # Esperar a que el daemon termine de forma natural (max 5s)
+        sleep 5
+        kill -9 $DAEMON_PID 2>/dev/null || true
+        exit 1
+    fi
+    # Si el daemon murió
+    if ! kill -0 $DAEMON_PID 2>/dev/null; then
+        echo "[entrypoint] Daemon murió, matando gateway y saliendo..."
+        kill $GATEWAY_PID 2>/dev/null || true
+        sleep 5
+        kill -9 $GATEWAY_PID 2>/dev/null || true
+        exit 1
+    fi
+    sleep 2
+done
