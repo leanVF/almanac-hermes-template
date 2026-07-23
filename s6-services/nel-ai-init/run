@@ -1,0 +1,31 @@
+#!/bin/sh
+# Servicio s6 para preparar el perfil y los symlinks antes de que arranquen
+# los demás servicios (gateway + daemon).
+# Tipo: oneshot (se ejecuta una vez y termina).
+
+set -e
+
+echo "[nel-ai-init] Inicializando perfil de Nel AI Vendedor..."
+
+export HERMES_HOME=/opt/data
+
+# 1. Crear el perfil si no existe
+if [ ! -d "$HERMES_HOME/profiles/nel-ai-vendedor" ]; then
+    echo "[nel-ai-init] Perfil no existe, copiando desde /opt/nel-ai/profile/"
+    mkdir -p "$HERMES_HOME/profiles"
+    cp -r /opt/nel-ai/profile "$HERMES_HOME/profiles/nel-ai-vendedor"
+fi
+
+# 2. Crear symlinks para los assets
+mkdir -p "$HERMES_HOME/work/almanac-onboarding/configuracion"
+for f in frases-y-tono productos precios informacion-general que-hacemos mercado-competencia mision-vision; do
+    if [ -f "/opt/nel-ai/configuracion/${f}.md" ] && [ ! -e "$HERMES_HOME/work/almanac-onboarding/configuracion/${f}.md" ]; then
+        ln -s "/opt/nel-ai/configuracion/${f}.md" "$HERMES_HOME/work/almanac-onboarding/configuracion/${f}.md"
+        echo "[nel-ai-init]   link: ${f}.md"
+    fi
+done
+
+# 3. Crear directorio de logs
+mkdir -p "$HERMES_HOME/profiles/nel-ai-vendedor/logs"
+
+echo "[nel-ai-init] Inicialización completa."

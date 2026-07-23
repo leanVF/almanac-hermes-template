@@ -1,0 +1,6 @@
+#!/bin/sh
+# Servicio s6 para el daemon de Nel AI (Chatwoot polling).
+# Se ejecuta automáticamente cuando s6-overlay arranca como PID 1.
+# Log: stdout/stderr se redirigen al log principal de s6.
+
+exec python3 /opt/nel-ai/daemon/nel-chatwoot-daemon.py 2>&1
