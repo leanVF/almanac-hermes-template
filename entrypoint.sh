@@ -1,86 +1,64 @@
 #!/bin/sh
-# Entrypoint de Nel AI Vendedor en container.
-# Arranca gateway de Hermes + daemon de Chatwoot en paralelo.
-#
-# HERMES_HOME en la imagen base es /opt/data (no /home/hermes/.hermes).
+# Entrypoint wrapper para Nel AI Vendedor.
+# La imagen base usa /init (s6-overlay) + main-wrapper.sh como entrypoint.
+# Necesitamos mantener ese entrypoint para que el gateway funcione,
+# y agregar el daemon de Chatwoot como un proceso adicional.
 
 set -e
 
-echo "[entrypoint] Iniciando Nel AI Vendedor..."
+echo "[entrypoint-wrapper] Iniciando Nel AI Vendedor wrapper..."
 
+# 1. Configurar HERMES_HOME
 export HERMES_HOME=/opt/data
-
-# 1. Crear symlinks para que el daemon encuentre sus assets.
-# El daemon espera:
-#   $HERMES_HOME/profiles/nel-ai-vendedor/SOUL.md
-#   $HERMES_HOME/profiles/nel-ai-vendedor/.env
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/frases-y-tono.md
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/productos.md
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/precios.md
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/informacion-general.md
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/que-hacemos.md
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/mercado-competencia.md
-#   $HERMES_HOME/work/almanac-onboarding/configuracion/mision-vision.md
-
-echo "[entrypoint] Creando estructura de directorios..."
-mkdir -p "$HERMES_HOME/work/almanac-onboarding/configuracion"
 
 # 2. Asegurar que el perfil existe
 if [ ! -d "$HERMES_HOME/profiles/nel-ai-vendedor" ]; then
-    echo "[entrypoint] Perfil no existe, copiando desde /opt/nel-ai/profile/"
+    echo "[entrypoint-wrapper] Perfil no existe, copiando desde /opt/nel-ai/profile/"
     mkdir -p "$HERMES_HOME/profiles"
     cp -r /opt/nel-ai/profile "$HERMES_HOME/profiles/nel-ai-vendedor"
 fi
 
-# 3. Crear symlinks para los assets de prompt
-# Solo si no existen ya (los archivos reales)
+# 3. Crear symlinks para los assets del daemon
+mkdir -p "$HERMES_HOME/work/almanac-onboarding/configuracion"
 for f in frases-y-tono productos precios informacion-general que-hacemos mercado-competencia mision-vision; do
     if [ -f "/opt/nel-ai/configuracion/${f}.md" ] && [ ! -e "$HERMES_HOME/work/almanac-onboarding/configuracion/${f}.md" ]; then
         ln -s "/opt/nel-ai/configuracion/${f}.md" "$HERMES_HOME/work/almanac-onboarding/configuracion/${f}.md"
-        echo "[entrypoint]   link: ${f}.md -> /opt/nel-ai/configuracion/${f}.md"
+        echo "[entrypoint-wrapper]   link: ${f}.md"
     fi
 done
 
 # 4. Directorio de logs
 mkdir -p "$HERMES_HOME/profiles/nel-ai-vendedor/logs"
 
-# 5. Arrancar gateway
-echo "[entrypoint] Iniciando Hermes Gateway..."
-gateway run >> "$HERMES_HOME/profiles/nel-ai-vendedor/logs/gateway.log" 2>&1 &
-GATEWAY_PID=$!
+# 5. Llamar al entrypoint ORIGINAL de la imagen base en background
+#    Esto arranca s6-overlay y todos los servicios internos (incluido el gateway)
+echo "[entrypoint-wrapper] Llamando al entrypoint de la imagen base..."
+/init /opt/hermes/docker/main-wrapper.sh &
+BASE_PID=$!
 
-echo "[entrypoint] Esperando 15s a que el gateway esté listo..."
-sleep 15
+# 6. Esperar a que el gateway arranque (s6-overlay tarda ~30s en estar listo)
+echo "[entrypoint-wrapper] Esperando 30s a que s6-overlay y el gateway arranquen..."
+sleep 30
 
-# 6. Arrancar daemon
-echo "[entrypoint] Iniciando daemon Nel AI (Chatwoot polling)..."
+# 7. Arrancar el daemon de Nel AI
+echo "[entrypoint-wrapper] Iniciando daemon Nel AI..."
 cd /opt/nel-ai/daemon
 python3 nel-chatwoot-daemon.py \
     >> "$HERMES_HOME/profiles/nel-ai-vendedor/logs/daemon.log" 2>&1 &
 DAEMON_PID=$!
 
-echo "[entrypoint] Gateway PID=$GATEWAY_PID, Daemon PID=$DAEMON_PID"
+echo "[entrypoint-wrapper] Base PID=$BASE_PID, Daemon PID=$DAEMON_PID"
 
-# 7. Loop: esperar a que cualquiera termine; si uno muere, matar el otro.
-# (NO usamos 'wait -n' porque no funciona en BusyBox sh — bug visto en producción.)
-echo "[entrypoint] Monitoreando procesos (Ctrl+C para salir)..."
+# 8. Monitorear (sin wait -n — usar kill -0)
+# Si el daemon muere, salimos; s6-overlay se encarga del gateway
 while true; do
-    # Si el gateway murió
-    if ! kill -0 $GATEWAY_PID 2>/dev/null; then
-        echo "[entrypoint] Gateway murió, matando daemon y saliendo..."
-        kill $DAEMON_PID 2>/dev/null || true
-        # Esperar a que el daemon termine de forma natural (max 5s)
-        sleep 5
-        kill -9 $DAEMON_PID 2>/dev/null || true
-        exit 1
-    fi
-    # Si el daemon murió
     if ! kill -0 $DAEMON_PID 2>/dev/null; then
-        echo "[entrypoint] Daemon murió, matando gateway y saliendo..."
-        kill $GATEWAY_PID 2>/dev/null || true
-        sleep 5
-        kill -9 $GATEWAY_PID 2>/dev/null || true
+        echo "[entrypoint-wrapper] Daemon murió, saliendo..."
         exit 1
     fi
-    sleep 2
+    if ! kill -0 $BASE_PID 2>/dev/null; then
+        echo "[entrypoint-wrapper] s6-overlay murió, saliendo..."
+        exit 1
+    fi
+    sleep 5
 done
