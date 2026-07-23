@@ -36,7 +36,7 @@ from socketserver import ThreadingMixIn
 # Config
 # ---------------------------------------------------------------------------
 
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/home/leanvf/.hermes"))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/opt/data"))
 PROFILE_DIR = HERMES_HOME / "profiles" / "nel-ai-vendedor"
 LOG_FILE = PROFILE_DIR / "logs" / "daemon.log"
 STATE_FILE = PROFILE_DIR / "logs" / "daemon.state.json"
