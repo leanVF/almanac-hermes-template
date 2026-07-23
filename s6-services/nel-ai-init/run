@@ -17,10 +17,9 @@ if [ ! -d "$HERMES_HOME/profiles/nel-ai-vendedor" ]; then
 fi
 
 # 2. Crear el .env desde las env vars del container (Coolify)
-# Solo si no existe (preservar cambios manuales en reinicios)
-if [ ! -f "$ENV_FILE" ]; then
-    echo "[nel-ai-init] Generando .env desde env vars de Coolify..."
-    cat > "$ENV_FILE" <<EOF
+# SIEMPRE se regenera (no preserva el viejo) para asegurar valores frescos
+echo "[nel-ai-init] Generando .env desde env vars de Coolify..."
+cat > "$ENV_FILE" <<EOF
 # Generado automáticamente por nel-ai-init desde Coolify env vars
 # NO editar a mano — los cambios se pierden en el próximo deploy
 
@@ -43,11 +42,8 @@ TRELLO_TOKEN=${TRELLO_TOKEN:-}
 TRELLO_BOARD_ID=${TRELLO_BOARD_ID:-}
 MCP_HIGGSFIELD_BEARER=${MCP_HIGGSFIELD_BEARER:-}
 EOF
-    chmod 600 "$ENV_FILE"
-    echo "[nel-ai-init] .env creado en $ENV_FILE"
-else
-    echo "[nel-ai-init] .env ya existe, conservando"
-fi
+chmod 600 "$ENV_FILE"
+echo "[nel-ai-init] .env creado en $ENV_FILE"
 
 # 3. Crear symlinks para los assets
 mkdir -p "$HERMES_HOME/work/almanac-onboarding/configuracion"
