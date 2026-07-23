@@ -1,0 +1,64 @@
+# Docker Compose para Nel AI Vendedor en Coolify
+# Coolify va a usar este archivo como build context.
+
+services:
+  hermes-nel-ai:
+    container_name: hermes-nel-ai
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: almanac/hermes-nel-ai:latest
+    restart: unless-stopped
+    environment:
+      # LLM
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - AISA_API_KEY=${AISA_API_KEY}
+
+      # Chatwoot (lo lee el daemon desde el perfil)
+      - CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL}
+      - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN}
+      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID}
+      - CHATWOOT_AGENT_NAME=${CHATWOOT_AGENT_NAME}
+      - CHATWOOT_AGENT_EMAIL=${CHATWOOT_AGENT_EMAIL}
+      - CHATWOOT_INBOX_IDS=${CHATWOOT_INBOX_IDS}
+      - CHATWOOT_MODE=${CHATWOOT_MODE}
+      - CHATWOOT_IGNORE_AGENT_MESSAGES=${CHATWOOT_IGNORE_AGENT_MESSAGES}
+
+      # Daemon config
+      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL}
+      - NEL_DAEMON_INTERVAL=${NEL_DAEMON_INTERVAL}
+      - NEL_WEBHOOK_HOST=${NEL_WEBHOOK_HOST}
+      - NEL_WEBHOOK_PORT=${NEL_WEBHOOK_PORT}
+
+    volumes:
+      # Volumen persistente para state, logs, memories
+      - nel-ai-data:/home/hermes/.hermes
+
+    ports:
+      # Gateway público (Coolify lo mapea al dominio)
+      - "8642:8642"
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8642/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  nel-ai-data:
+    name: nel-ai-data
