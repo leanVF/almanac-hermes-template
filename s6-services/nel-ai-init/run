@@ -19,6 +19,21 @@ fi
 # 2. Crear el .env desde las env vars del container (Coolify)
 # SIEMPRE se regenera (no preserva el viejo) para asegurar valores frescos
 echo "[nel-ai-init] Generando .env desde env vars de Coolify..."
+echo "[nel-ai-init] Debug env vars:"
+for var in CHATWOOT_BASE_URL CHATWOOT_API_TOKEN CHATWOOT_ACCOUNT_ID CHATWOOT_INBOX_IDS HERMES_GATEWAY_URL NEL_DAEMON_INTERVAL; do
+    val=$(eval echo \$$var)
+    if [ -z "$val" ]; then
+        echo "[nel-ai-init]   $var = (VACÍA)"
+    else
+        # Mostrar primeros 10 y últimos 4 chars
+        if [ ${#val} -gt 20 ]; then
+            shown="${val:0:10}...${val: -4}"
+        else
+            shown="$val"
+        fi
+        echo "[nel-ai-init]   $var = $shown"
+    fi
+done
 cat > "$ENV_FILE" <<EOF
 # Generado automáticamente por nel-ai-init desde Coolify env vars
 # NO editar a mano — los cambios se pierden en el próximo deploy
