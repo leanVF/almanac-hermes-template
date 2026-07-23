@@ -1,8 +1,14 @@
 #!/bin/sh
 # Servicio s6 para el daemon de Nel AI (Chatwoot polling).
-# Exporta HERMES_HOME explícitamente para que el daemon use el path correcto
-# y los subprocess de Hermes que invoque también lo hereden.
+# Lee el API token desde /root/nel-ai-secrets.env (montado desde el host).
 
 export HERMES_HOME=/opt/data
+
+# Cargar secretos desde el archivo montado
+if [ -f /root/nel-ai-secrets.env ]; then
+    set -a
+    . /root/nel-ai-secrets.env
+    set +a
+fi
 
 exec python3 /opt/nel-ai/daemon/nel-chatwoot-daemon.py 2>&1
