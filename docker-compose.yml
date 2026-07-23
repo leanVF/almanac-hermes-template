@@ -1,46 +1,46 @@
-# Docker Compose para Nel AI Vendedor en Coolify
-# Coolify va a usar este archivo como build context.
+version: "3.8"
 
 services:
-  hermes-nel-ai:
-    container_name: hermes-nel-ai
+  nel-ai-vendedor:
+    container_name: nel-ai-vendedor
     build:
       context: .
       dockerfile: Dockerfile
     image: almanac/hermes-nel-ai:latest
     restart: unless-stopped
     environment:
-      # LLM
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
-      - AISA_API_KEY=${AISA_API_KEY}
+      # === LLM (valores no-secretos pueden quedar vacíos si no se usan) ===
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - AISA_API_KEY=${AISA_API_KEY:-}
 
-      # Chatwoot (lo lee el daemon desde el perfil)
-      - CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL}
-      - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN}
-      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID}
-      - CHATWOOT_AGENT_NAME=${CHATWOOT_AGENT_NAME}
-      - CHATWOOT_AGENT_EMAIL=${CHATWOOT_AGENT_EMAIL}
-      - CHATWOOT_INBOX_IDS=${CHATWOOT_INBOX_IDS}
-      - CHATWOOT_MODE=${CHATWOOT_MODE}
-      - CHATWOOT_IGNORE_AGENT_MESSAGES=${CHATWOOT_IGNORE_AGENT_MESSAGES}
+      # === Chatwoot (CRÍTICO) ===
+      - CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL:-}
+      - CHATWOOT_API_TOKEN=${CHATWOOT_API_TOKEN:-}
+      - CHATWOOT_ACCOUNT_ID=${CHATWOOT_ACCOUNT_ID:-1}
+      - CHATWOOT_AGENT_NAME=${CHATWOOT_AGENT_NAME:-Nel AI Vendedor}
+      - CHATWOOT_AGENT_EMAIL=${CHATWOOT_AGENT_EMAIL:-nel-ai-vendedor@almanac.lat}
+      - CHATWOOT_INBOX_IDS=${CHATWOOT_INBOX_IDS:-2,4}
+      - CHATWOOT_MODE=${CHATWOOT_MODE:-auto}
+      - CHATWOOT_IGNORE_AGENT_MESSAGES=${CHATWOOT_IGNORE_AGENT_MESSAGES:-true}
 
-      # Daemon config
-      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL}
-      - NEL_DAEMON_INTERVAL=${NEL_DAEMON_INTERVAL}
-      - NEL_WEBHOOK_HOST=${NEL_WEBHOOK_HOST}
-      - NEL_WEBHOOK_PORT=${NEL_WEBHOOK_PORT}
+      # === Daemon ===
+      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL:-http://127.0.0.1:8642}
+      - NEL_DAEMON_INTERVAL=${NEL_DAEMON_INTERVAL:-8}
+      - NEL_WEBHOOK_HOST=${NEL_WEBHOOK_HOST:-127.0.0.1}
+      - NEL_WEBHOOK_PORT=${NEL_WEBHOOK_PORT:-8766}
 
     volumes:
-      # Volumen persistente para state, logs, memories
+      # Volumen persistente para state.db, logs, memories
       - nel-ai-data:/home/hermes/.hermes
+      # Secret file (montado desde Coolify File Mount)
+      - /root/nel-ai-secrets.env:/root/nel-ai-secrets.env:ro
 
     ports:
-      # Gateway público (Coolify lo mapea al dominio)
       - "8642:8642"
 
     healthcheck:
@@ -49,15 +49,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
-
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
 
 volumes:
   nel-ai-data:
