@@ -36,6 +36,12 @@ COPY --chown=root:root s6-services/nel-ai-daemon /etc/s6-overlay/s6-rc.d/nel-ai-
 # Hacer ejecutables los run scripts
 RUN chmod +x /etc/s6-overlay/s6-rc.d/nel-ai-init/run /etc/s6-overlay/s6-rc.d/nel-ai-daemon/run
 
+# CRÍTICO: registrar los servicios en el bundle "user" de s6-overlay
+# Sin esto, s6-overlay no los ejecuta aunque estén en s6-rc.d/
+# (El bundle "user" es lo que s6-overlay arranca por default)
+RUN touch /etc/s6-overlay/s6-rc.d/user/contents.d/nel-ai-init \
+          /etc/s6-overlay/s6-rc.d/user/contents.d/nel-ai-daemon
+
 # Healthcheck: validar que el gateway responde
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=60s \
     CMD curl -fsS http://127.0.0.1:8642/health || exit 1
