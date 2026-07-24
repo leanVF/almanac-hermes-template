@@ -6,7 +6,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: almanac/hermes-nel-ai:latest
     restart: unless-stopped
     environment:
       # === LLM (valores no-secretos pueden quedar vacíos si no se usan) ===
