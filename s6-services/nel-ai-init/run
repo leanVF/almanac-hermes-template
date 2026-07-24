@@ -11,15 +11,16 @@ export HERMES_HOME=/opt/data
 ENV_FILE="$HERMES_HOME/profiles/nel-ai-vendedor/.env"
 
 # 1. Cargar env vars del PID 1 (el container init)
-# /proc/1/environ tiene null-separated KEY=VALUE
+# /proc/1/environ tiene null-separated KEY=VALUE.
+# Usamos 'tr' para convertir null bytes a newlines, luego parseamos.
 if [ -r /proc/1/environ ]; then
-    while IFS= read -r -d '' line; do
+    for line in $(tr '\0' '\n' < /proc/1/environ); do
         case "$line" in
             CHATWOOT_*|HERMES_GATEWAY_URL|NEL_DAEMON_INTERVAL|NEL_WEBHOOK_*|OPENROUTER_API_KEY|GOOGLE_API_KEY|MISTRAL_API_KEY|NVIDIA_API_KEY|AISA_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY|TELEGRAM_*|TRELLO_*|MCP_HIGGSFIELD_BEARER)
                 export "$line"
                 ;;
         esac
-    done < /proc/1/environ
+    done
 fi
 
 # 2. Crear el perfil si no existe
