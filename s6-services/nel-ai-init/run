@@ -1,6 +1,7 @@
 #!/bin/sh
 # Servicio s6 para preparar el perfil y los symlinks.
-# Genera el .env del perfil desde las env vars de Coolify.
+# Lee env vars de /proc/1/environ (el env del PID 1 del container)
+# porque s6-overlay filtra el env entre servicios.
 
 set -e
 
@@ -9,23 +10,34 @@ echo "[nel-ai-init] Inicializando perfil de Nel AI Vendedor..."
 export HERMES_HOME=/opt/data
 ENV_FILE="$HERMES_HOME/profiles/nel-ai-vendedor/.env"
 
-# 1. Crear el perfil si no existe
+# 1. Cargar env vars del PID 1 (el container init)
+# /proc/1/environ tiene null-separated KEY=VALUE
+if [ -r /proc/1/environ ]; then
+    while IFS= read -r -d '' line; do
+        case "$line" in
+            CHATWOOT_*|HERMES_GATEWAY_URL|NEL_DAEMON_INTERVAL|NEL_WEBHOOK_*|OPENROUTER_API_KEY|GOOGLE_API_KEY|MISTRAL_API_KEY|NVIDIA_API_KEY|AISA_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY|TELEGRAM_*|TRELLO_*|MCP_HIGGSFIELD_BEARER)
+                export "$line"
+                ;;
+        esac
+    done < /proc/1/environ
+fi
+
+# 2. Crear el perfil si no existe
 if [ ! -d "$HERMES_HOME/profiles/nel-ai-vendedor" ]; then
     echo "[nel-ai-init] Perfil no existe, copiando desde /opt/nel-ai/profile/"
     mkdir -p "$HERMES_HOME/profiles"
     cp -r /opt/nel-ai/profile "$HERMES_HOME/profiles/nel-ai-vendedor"
 fi
 
-# 2. Crear el .env desde las env vars del container (Coolify)
+# 3. Crear el .env desde las env vars del PID 1
 # SIEMPRE se regenera (no preserva el viejo) para asegurar valores frescos
-echo "[nel-ai-init] Generando .env desde env vars de Coolify..."
+echo "[nel-ai-init] Generando .env desde env vars del container..."
 echo "[nel-ai-init] Debug env vars:"
 for var in CHATWOOT_BASE_URL CHATWOOT_API_TOKEN CHATWOOT_ACCOUNT_ID CHATWOOT_INBOX_IDS HERMES_GATEWAY_URL NEL_DAEMON_INTERVAL; do
     val=$(eval echo \$$var)
     if [ -z "$val" ]; then
         echo "[nel-ai-init]   $var = (VACÍA)"
     else
-        # Mostrar primeros 10 y últimos 4 chars
         if [ ${#val} -gt 20 ]; then
             shown="${val:0:10}...${val: -4}"
         else
@@ -35,7 +47,7 @@ for var in CHATWOOT_BASE_URL CHATWOOT_API_TOKEN CHATWOOT_ACCOUNT_ID CHATWOOT_INB
     fi
 done
 cat > "$ENV_FILE" <<EOF
-# Generado automáticamente por nel-ai-init desde Coolify env vars
+# Generado automáticamente por nel-ai-init
 # NO editar a mano — los cambios se pierden en el próximo deploy
 
 CHATWOOT_BASE_URL=${CHATWOOT_BASE_URL:-}
@@ -60,7 +72,7 @@ EOF
 chmod 600 "$ENV_FILE"
 echo "[nel-ai-init] .env creado en $ENV_FILE"
 
-# 3. Crear symlinks para los assets
+# 4. Crear symlinks para los assets
 mkdir -p "$HERMES_HOME/work/almanac-onboarding/configuracion"
 for f in frases-y-tono productos precios informacion-general que-hacemos mercado-competencia mision-vision; do
     if [ -f "/opt/nel-ai/configuracion/${f}.md" ] && [ ! -e "$HERMES_HOME/work/almanac-onboarding/configuracion/${f}.md" ]; then
@@ -69,7 +81,7 @@ for f in frases-y-tono productos precios informacion-general que-hacemos mercado
     fi
 done
 
-# 4. Crear directorio de logs
+# 5. Crear directorio de logs
 mkdir -p "$HERMES_HOME/profiles/nel-ai-vendedor/logs"
 
 echo "[nel-ai-init] Inicialización completa."
